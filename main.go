@@ -1,9 +1,10 @@
 package main
 
 import (
-    "fmt"
     "os"
+    "fmt"
     "time"
+    "strconv"
 
     api "github.com/quackduck/devzat/devzatapi"
 )
@@ -27,15 +28,15 @@ func makeBank(size int) messageBank {
     }
 }
 
-func (b *messageBank) readNthPreviousMsg(index int) (TimedMsg, bool) {
+func (b *messageBank) readNthPreviousMsg(index int) *TimedMsg {
     index += 1
     if index >= b.size {
-        return b.msgs[0], false
+        return nil
     }
     if b.index - index < 0 {
-        return b.msgs[0], false
+        return nil
     }
-    return b.msgs[(b.index - index) % b.size], true
+    return &b.msgs[(b.index - index) % b.size]
 }
 
 func (b *messageBank) addMessage(msg TimedMsg) {
@@ -43,12 +44,12 @@ func (b *messageBank) addMessage(msg TimedMsg) {
     b.index = b.index + 1
 }
 
-func (b *messageBank) compilePreviousMsg(count int) string {
+func (b *messageBank) compilePreviousMsg(count int, fromRoom string) string {
     ret := ""
     i := count - 1
     for i >= 0 {
-        msg, Ok := b.readNthPreviousMsg(i)
-        if Ok {
+        msg := b.readNthPreviousMsg(i)
+        if msg != nil && (fromRoom == "" || msg.msg.Room == fromRoom) {
             ret = ret + formatMsg(msg.msg)
         }
         i = i - 1
@@ -57,7 +58,7 @@ func (b *messageBank) compilePreviousMsg(count int) string {
 }
 
 func formatMsg(msg api.Message) string {
-    return fmt.Sprintf("%v %v: %v\n", msg.Room, msg.From, msg.Data)
+    return fmt.Sprintf("%v: %v  \n", msg.From, msg.Data)
 }
 
 func timeMessage(msg api.Message) TimedMsg {
@@ -67,23 +68,41 @@ func timeMessage(msg api.Message) TimedMsg {
     }
 }
 
+var bank messageBank
+var session *api.Session
+
+func extractCmd(cmdCall api.CmdCall, err error) {
+    if err != nil {
+        panic(err)
+    }
+    count, err := strconv.Atoi(cmdCall.Args)
+    if err != nil {
+        panic(err)
+    }
+    err = session.SendMessage(api.Message{Room: cmdCall.Room, From: "Devzat-extractor", Data: bank.compilePreviousMsg(count, cmdCall.Room), DMTo: ""})
+    if err != nil {
+        panic(err)
+    }
+}
+
 func main() {
-    s, err := api.NewSession("devzat.hackclub.com:5556", os.Getenv("DEVZAT_TOKEN"))
+    var err error
+    session, err = api.NewSession("devzat.hackclub.com:5556", os.Getenv("DEVZAT_TOKEN"))
     if err != nil {
         panic(err)
     }
 
-    bank := makeBank(5)
+    bank = makeBank(5)
 
     go func() {
-        messageChan, _, err := s.RegisterListener(false, false, "")
+        messageChan, _, err := session.RegisterListener(false, false, "")
         if err != nil {
             panic(err)
         }
 
         for {
             select {
-            case err = <-s.ErrorChan:
+            case err = <-session.ErrorChan:
                 panic(err)
             case msg := <-messageChan:
                 bank.addMessage(timeMessage(msg))
@@ -91,9 +110,14 @@ func main() {
         }
     }()
 
+    err = session.RegisterCmd("extract", "duration", "Extract the messages posted in `duration`", extractCmd)
+    if err != nil {
+        panic(err)
+    }
+
     for {
-        time.Sleep(10* time.Second)
-        fmt.Printf("<%v>\n", bank.compilePreviousMsg(3))
+        //time.Sleep(10* time.Second)
+        //fmt.Printf("<%v>\n", bank.compilePreviousMsg(3))
     }
 
 }
