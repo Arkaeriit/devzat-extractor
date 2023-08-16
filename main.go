@@ -11,7 +11,7 @@ import (
 
 type TimedMsg struct {
 	msg api.Message
-	ts  time.Time
+	ts  int64
 }
 
 // A circular buffer used to store the latest messages
@@ -77,13 +77,13 @@ func formatMsg(msg api.Message) string {
 func timeMessage(msg api.Message) TimedMsg {
 	return TimedMsg{
 		msg: msg,
-		ts:  time.Now(),
+		ts:  time.Now().Unix(),
 	}
 }
 
 // Takes a string representing a duration and returns the timestamp that was
 // this duration ago. Return nil if the duration is not valid.
-func timestampWhenDuration(msg string) *time.Time {
+func timestampWhenDuration(msg string) *int64 {
 	if msg[0] != '-' {
 		msg = "-" + msg
 	}
@@ -93,22 +93,22 @@ func timestampWhenDuration(msg string) *time.Time {
 		return nil
 	}
 	now := time.Now()
-	then := now.Add(duration)
+	then := now.Add(duration).Unix()
 	return &then
 }
 
 // Returned the compiled messages between the two timestamps.
-func (b *messageBank) messagesBetween(ts_start time.Time, ts_stop time.Time, fromRoom string) string {
+func (b *messageBank) messagesBetween(ts_start int64, ts_stop int64, fromRoom string) string {
 	ret := ""
 	for i := b.size - 1; i >= 0; i-- {
 		msg := b.readNthPreviousMsg(i)
 		if msg == nil {
 			continue
 		}
-		if ts_stop.Before(msg.ts) {
+		if ts_stop < msg.ts {
 			break
 		}
-		if ts_start.Before(msg.ts) {
+		if ts_start < msg.ts {
 			if fromRoom == "" || fromRoom == msg.msg.Room {
 				ret = ret + formatMsg(msg.msg)
 			}
