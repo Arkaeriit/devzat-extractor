@@ -46,11 +46,12 @@ func (b *messageBank) addMessage(msg TimedMsg) {
 
 func (b *messageBank) compilePreviousMsg(count int, fromRoom string) string {
     ret := ""
-    i := count - 1
-    for i >= 0 {
+    i := b.size - 1
+    for i >= 0 && count > 0 {
         msg := b.readNthPreviousMsg(i)
         if msg != nil && (fromRoom == "" || msg.msg.Room == fromRoom) {
             ret = ret + formatMsg(msg.msg)
+            count = count - 1
         }
         i = i - 1
     }
@@ -92,7 +93,7 @@ func main() {
         panic(err)
     }
 
-    bank = makeBank(5)
+    bank = makeBank(50)
 
     go func() {
         messageChan, _, err := session.RegisterListener(false, false, "")
@@ -116,8 +117,8 @@ func main() {
     }
 
     for {
-        //time.Sleep(10* time.Second)
-        //fmt.Printf("<%v>\n", bank.compilePreviousMsg(3))
+        time.Sleep(10* time.Second)
+        fmt.Printf("<%v>\n", bank.compilePreviousMsg(30, ""))
     }
 
 }
