@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
-	"strconv"
+	//"strconv"
 	"time"
 
 	api "github.com/quackduck/devzat/devzatapi"
@@ -81,6 +81,42 @@ func timeMessage(msg api.Message) TimedMsg {
 	}
 }
 
+// Takes a string representing a duration and returns the timestamp that was
+// this duration ago. Return nil if the duration is not valid.
+func timestampWhenDuration(msg string) *time.Time {
+	if msg[0] != '-' {
+		msg = "-" + msg
+	}
+	duration, err := time.ParseDuration(msg)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	now := time.Now()
+	then := now.Add(duration)
+	return &then
+}
+
+// Returned the compiled messages between the two timestamps.
+func (b *messageBank) messagesBetween(ts_start time.Time, ts_stop time.Time, fromRoom string) string {
+	ret := ""
+	for i := b.size - 1; i >= 0; i-- {
+		msg := b.readNthPreviousMsg(i)
+		if msg == nil {
+			continue
+		}
+		if ts_stop.Before(msg.ts) {
+			break
+		}
+		if ts_start.Before(msg.ts) {
+			if fromRoom == "" || fromRoom == msg.msg.Room {
+				ret = ret + formatMsg(msg.msg)
+			}
+		}
+	}
+	return ret
+}
+
 func main() {
 	session, err := api.NewSession("devzat.hackclub.com:5556", os.Getenv("DEVZAT_TOKEN"))
 	if err != nil {
@@ -111,11 +147,7 @@ func main() {
 			if err != nil {
 				panic(err)
 			}
-			count, err := strconv.Atoi(cmdCall.Args)
-			if err != nil {
-				panic(err)
-			}
-			err = session.SendMessage(api.Message{Room: cmdCall.Room, From: "Devzat-extractor", Data: bank.compilePreviousMsg(count, cmdCall.Room), DMTo: ""})
+			err = session.SendMessage(api.Message{Room: cmdCall.Room, From: "Devzat-extractor", Data: bank.messagesBetween(*timestampWhenDuration(cmdCall.Args), *timestampWhenDuration("-1s"), cmdCall.Room), DMTo: ""})
 			if err != nil {
 				panic(err)
 			}
@@ -124,6 +156,7 @@ func main() {
 		panic(err)
 	}
 
+	// Debug
 	for {
 		time.Sleep(10 * time.Second)
 		fmt.Printf("<%v>\n", bank.compilePreviousMsg(30, ""))
