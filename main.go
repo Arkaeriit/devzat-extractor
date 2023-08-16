@@ -6,6 +6,7 @@ import (
 	//"strconv"
 	"time"
 
+	//"github.com/gin-gonic/gin"
 	api "github.com/quackduck/devzat/devzatapi"
 )
 
@@ -127,6 +128,8 @@ func main() {
 	// Read all incoming messages
 	go func() {
 		messageChan, _, err := session.RegisterListener(false, false, "")
+        fmt.Println(messageChan)
+        fmt.Println(err)
 		if err != nil {
 			panic(err)
 		}
@@ -136,6 +139,7 @@ func main() {
 			case err = <-session.ErrorChan:
 				panic(err)
 			case msg := <-messageChan:
+                fmt.Println(msg)
 				bank.addMessage(timeMessage(msg))
 			}
 		}
@@ -144,11 +148,17 @@ func main() {
 	// tmp
 	err = session.RegisterCmd("extract", "duration", "Extract the messages posted in `duration`",
 		func(cmdCall api.CmdCall, err error) {
-			if err != nil {
-				panic(err)
+			fmt.Println("???")
+			from := timestampWhenDuration(cmdCall.Args)
+			if from == nil {
+				err := session.SendMessage(api.Message{Room: cmdCall.Room, From: "Devzat-extractor", Data: "Error, invalid duration", DMTo: ""})
+				if err != nil {
+					panic(err)
+				}
 			}
-			err = session.SendMessage(api.Message{Room: cmdCall.Room, From: "Devzat-extractor", Data: bank.messagesBetween(*timestampWhenDuration(cmdCall.Args), *timestampWhenDuration("-1s"), cmdCall.Room), DMTo: ""})
-			if err != nil {
+			url := fmt.Sprintf("http://localhost:8080/timespan/%v/%v/%v", cmdCall.Room, *from, *timestampWhenDuration("-1"))
+            er := session.SendMessage(api.Message{Room: cmdCall.Room, From: "Devzat-extractor", Data: url, DMTo: ""})
+			if er != nil {
 				panic(err)
 			}
 		})
@@ -156,10 +166,34 @@ func main() {
 		panic(err)
 	}
 
+    /*
+	go func() {
+		router := gin.Default()
+		router.GET("/timespan/:room/:from/:to", func(c *gin.Context) {
+			room := c.Param("room")
+			if room == "all" {
+				room = ""
+			}
+			from, err := strconv.ParseInt(c.Param("from"), 10, 64)
+			if err != nil {
+				c.String(400, "Error: %v", err)
+			}
+			to, err := strconv.ParseInt(c.Param("to"), 10, 64)
+			if err != nil {
+				c.String(400, "Error: %v", err)
+			}
+
+			c.String(200, "%v", bank.messagesBetween(from, to, room))
+		})
+
+		router.Run("localhost:8080")
+	}()
+    */
+
 	// Debug
 	for {
 		time.Sleep(10 * time.Second)
-		fmt.Printf("<%v>\n", bank.compilePreviousMsg(30, ""))
+        fmt.Printf("<%v>\n", bank.compilePreviousMsg(30, ""))
 	}
 
 }
