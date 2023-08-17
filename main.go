@@ -3,10 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
-	//"strconv"
+	"strconv"
 	"time"
 
-	//"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin"
 	api "github.com/quackduck/devzat/devzatapi"
 )
 
@@ -128,8 +128,6 @@ func main() {
 	// Read all incoming messages
 	go func() {
 		messageChan, _, err := session.RegisterListener(false, false, "")
-        fmt.Println(messageChan)
-        fmt.Println(err)
 		if err != nil {
 			panic(err)
 		}
@@ -139,7 +137,6 @@ func main() {
 			case err = <-session.ErrorChan:
 				panic(err)
 			case msg := <-messageChan:
-                fmt.Println(msg)
 				bank.addMessage(timeMessage(msg))
 			}
 		}
@@ -148,7 +145,6 @@ func main() {
 	// tmp
 	err = session.RegisterCmd("extract", "duration", "Extract the messages posted in `duration`",
 		func(cmdCall api.CmdCall, err error) {
-			fmt.Println("???")
 			from := timestampWhenDuration(cmdCall.Args)
 			if from == nil {
 				err := session.SendMessage(api.Message{Room: cmdCall.Room, From: "Devzat-extractor", Data: "Error, invalid duration", DMTo: ""})
@@ -156,8 +152,8 @@ func main() {
 					panic(err)
 				}
 			}
-			url := fmt.Sprintf("http://localhost:8080/timespan/%v/%v/%v", cmdCall.Room, *from, *timestampWhenDuration("-1"))
-            er := session.SendMessage(api.Message{Room: cmdCall.Room, From: "Devzat-extractor", Data: url, DMTo: ""})
+			url := fmt.Sprintf("http://localhost:8080/timespan/%v/%v/%v", cmdCall.Room[1:], *from, *timestampWhenDuration("-1s"))
+			er := session.SendMessage(api.Message{Room: cmdCall.Room, From: "Devzat-extractor", Data: url, DMTo: ""})
 			if er != nil {
 				panic(err)
 			}
@@ -166,13 +162,14 @@ func main() {
 		panic(err)
 	}
 
-    /*
 	go func() {
 		router := gin.Default()
 		router.GET("/timespan/:room/:from/:to", func(c *gin.Context) {
 			room := c.Param("room")
 			if room == "all" {
 				room = ""
+			} else {
+				room = "#" + room
 			}
 			from, err := strconv.ParseInt(c.Param("from"), 10, 64)
 			if err != nil {
@@ -188,12 +185,11 @@ func main() {
 
 		router.Run("localhost:8080")
 	}()
-    */
 
 	// Debug
 	for {
 		time.Sleep(10 * time.Second)
-        fmt.Printf("<%v>\n", bank.compilePreviousMsg(30, ""))
+		//fmt.Printf("<%v>\n", bank.compilePreviousMsg(30, ""))
 	}
 
 }
