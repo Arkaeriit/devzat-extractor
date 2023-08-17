@@ -134,6 +134,7 @@ func genExtractedURL(from string, room string, s *api.Session, hostname string) 
 	}
 }
 
+// Serves a web reply with the requested messages
 func replyExtract(room string, from string, to string, c *gin.Context, bank *messageBank) {
 	if room == "all" {
 		room = ""
@@ -149,7 +150,12 @@ func replyExtract(room string, from string, to string, c *gin.Context, bank *mes
 		return
 	}
 
-	c.String(200, "%v", bank.messagesBetween(ts_start, ts_stop, room))
+	msgs := bank.messagesBetween(ts_start, ts_stop, room)
+	code := 200
+	if len(msgs) == 0 {
+		code = 204
+	}
+	c.String(code, "%v", msgs)
 }
 
 func main() {
