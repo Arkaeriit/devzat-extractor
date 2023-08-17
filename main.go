@@ -118,12 +118,67 @@ func (b *messageBank) messagesBetween(ts_start int64, ts_stop int64, fromRoom st
 	return ret
 }
 
-func main() {
-	session, err := api.NewSession("devzat.hackclub.com:5556", os.Getenv("DEVZAT_TOKEN"))
+// Generates the URL that will contain the extracted data
+func genExtractedURL(from string, room string, s *api.Session, hostname string) {
+	from_ts := timestampWhenDuration(from)
+	if from_ts == nil {
+		err := s.SendMessage(api.Message{Room: room, From: "Devzat-extractor", Data: "Error, invalid duration", DMTo: ""})
+		if err != nil {
+			panic(err)
+		}
+	}
+	url := fmt.Sprintf("%v/timespan/%v/%v/%v/extract.txt", hostname, room[1:], *from_ts, *timestampWhenDuration("-1s"))
+	err := s.SendMessage(api.Message{Room: room, From: "Devzat-extractor", Data: url, DMTo: ""})
 	if err != nil {
 		panic(err)
 	}
-	bank := makeBank(50)
+}
+
+func replyExtract(room string, from string, to string, c *gin.Context, bank *messageBank) {
+	if room == "all" {
+		room = ""
+	}
+	ts_start, err := strconv.ParseInt(from, 10, 64)
+	if err != nil {
+		c.String(400, "Error: %v", err)
+		return
+	}
+	ts_stop, err := strconv.ParseInt(to, 10, 64)
+	if err != nil {
+		c.String(400, "Error: %v", err)
+		return
+	}
+
+	c.String(200, "%v", bank.messagesBetween(ts_start, ts_stop, room))
+}
+
+func main() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+		fmt.Println("No port given, defaulting to 8080")
+	}
+	host := os.Getenv("HOST")
+	if host == "" {
+		host = "http://localhost:" + port
+		fmt.Println("No host given, defaulting to " + host)
+	}
+	bankSize, err := strconv.Atoi(os.Getenv("BANK_SIZE"))
+	if err != nil {
+		fmt.Println("No bank size given, defaulting to 1000")
+		bankSize = 1000
+	}
+	devzatHost := os.Getenv("DEVZAT_HOST")
+	if devzatHost == "" {
+		devzatHost = "devzat.hackclub.com:5556"
+		fmt.Println("No Devzat host given, defaulting to " + devzatHost)
+	}
+
+	session, err := api.NewSession(devzatHost, os.Getenv("DEVZAT_TOKEN"))
+	if err != nil {
+		panic(err)
+	}
+	bank := makeBank(bankSize)
 
 	// Read all incoming messages
 	go func() {
@@ -142,48 +197,26 @@ func main() {
 		}
 	}()
 
-	// tmp
+	// A command to get and URL with the extracted messages
 	err = session.RegisterCmd("extract", "duration", "Extract the messages posted in `duration`",
 		func(cmdCall api.CmdCall, err error) {
-			from := timestampWhenDuration(cmdCall.Args)
-			if from == nil {
-				err := session.SendMessage(api.Message{Room: cmdCall.Room, From: "Devzat-extractor", Data: "Error, invalid duration", DMTo: ""})
-				if err != nil {
-					panic(err)
-				}
-			}
-			url := fmt.Sprintf("http://localhost:8080/timespan/%v/%v/%v", cmdCall.Room[1:], *from, *timestampWhenDuration("-1s"))
-			er := session.SendMessage(api.Message{Room: cmdCall.Room, From: "Devzat-extractor", Data: url, DMTo: ""})
-			if er != nil {
-				panic(err)
-			}
+			genExtractedURL(cmdCall.Args, cmdCall.Room, session, host)
 		})
 	if err != nil {
 		panic(err)
 	}
 
+	// Web server that serves a text file with the extracted data
 	go func() {
 		router := gin.Default()
-		router.GET("/timespan/:room/:from/:to", func(c *gin.Context) {
-			room := c.Param("room")
-			if room == "all" {
-				room = ""
-			} else {
-				room = "#" + room
-			}
-			from, err := strconv.ParseInt(c.Param("from"), 10, 64)
-			if err != nil {
-				c.String(400, "Error: %v", err)
-			}
-			to, err := strconv.ParseInt(c.Param("to"), 10, 64)
-			if err != nil {
-				c.String(400, "Error: %v", err)
-			}
-
-			c.String(200, "%v", bank.messagesBetween(from, to, room))
+		router.GET("/timespan/:room/:from/:to/extract.txt", func(c *gin.Context) {
+			replyExtract("#"+c.Param("room"), c.Param("from"), c.Param("to"), c, &bank)
+		})
+		router.GET("/timespan-all/:from/:to/extract.txt", func(c *gin.Context) {
+			replyExtract("", c.Param("from"), c.Param("to"), c, &bank)
 		})
 
-		router.Run("localhost:8080")
+		router.Run("localhost:" + port)
 	}()
 
 	// Debug
