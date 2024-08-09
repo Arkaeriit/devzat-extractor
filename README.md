@@ -21,7 +21,7 @@ The plugin is made for a single-file executable. It is configured with the follo
 
 |Variable name |Description                                        |Default                                                                     |
 |--------------|---------------------------------------------------|----------------------------------------------------------------------------|
-|`DEVZAT_HOST` |URL of the chat-room interface                     |`https://devzat.hackclub.com:5556`                                          |
+|`DEVZAT_HOST` |URL of the chat-room interface                     |`devzat.hackclub.com:5556`                                                  |
 |`DEVZAT_TOKEN`|Authentication token                               |Does not defaults to anything. The program panics if the token is not given.|
 |`PORT`        |The port used to serve the web API                 |8080                                                                        |
 |`HOST`        |The host name and protocol of the web API          |`http://localhost:8080`                                                     |
