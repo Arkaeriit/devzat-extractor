@@ -120,12 +120,16 @@ func (b *messageBank) messagesBetween(ts_start int64, ts_stop int64, fromRoom st
 
 // Generates the URL that will contain the extracted data
 func genExtractedURL(from string, room string, s *api.Session, hostname string) {
+	if from == "" {
+		return
+	}
 	from_ts := timestampWhenDuration(from)
 	if from_ts == nil {
 		err := s.SendMessage(api.Message{Room: room, From: "Devzat-extractor", Data: "Error, invalid duration", DMTo: ""})
 		if err != nil {
 			panic(err)
 		}
+		return
 	}
 	url := fmt.Sprintf("%v/timespan/%v/%v/%v/extract.txt", hostname, room[1:], *from_ts, *timestampWhenDuration("-1s"))
 	err := s.SendMessage(api.Message{Room: room, From: "Devzat-extractor", Data: url, DMTo: ""})
